@@ -1,6 +1,6 @@
-# Fleet management backend — Peppermint SDE-1 challenge
+# Fleet management backend 
 
-Assignment 2 (Backend). Eight simulated robots, each its own OS process, replay their
+Eight simulated robots, each its own OS process, replay their
 slice of `events.jsonl` over MQTT. A FastAPI service consumes that feed, maintains the
 fleet's current state, and exposes it two ways — a WebSocket stream and a REST endpoint —
 that cannot disagree with each other.
