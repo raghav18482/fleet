@@ -157,7 +157,7 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt -r sim
 .venv/bin/python -m pytest -q
 ```
 
-89 tests, no broker or container required. The concentration reflects where the risk is:
+90 tests, no broker or container required. The concentration reflects where the risk is:
 
 - `backend/tests/test_fleet_state.py` — the `seq` guard, including the realistic
   `40, 41, 42, 41` redelivery that would otherwise move a robot backwards.
@@ -177,23 +177,6 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt -r sim
 - `sim/tests/test_seq.py` — every failure mode of the ordering token is silent, so it gets
   its own file.
 
-## AI delegation notes
-
-This was built with Claude (Claude Code) throughout, and used the way the brief invites:
-freely, but with the architecture decisions made explicitly rather than accepted by default.
-
-- **Directed by me:** choosing MQTT over an initial plan of Redis Pub/Sub, once the
-  delivery-guarantee tradeoff was laid out; scoping the work to core plus the history
-  stretch goal; the decision to keep state in-process rather than reaching for Redis.
-- **Delegated:** most implementation and test authoring, the docstrings, and drafting these
-  documents.
-- **Found by the tests, not by inspection:** `sim/tests/test_replay.py` caught that two
-  publishes inside the same millisecond produced an identical `seq`, which the backend's
-  guard would have dropped silently. The fix is `next_seq()`'s `max(clock, last + 1)`, which
-  also makes the token survive a process restart and a backwards clock step.
-- A local smoke run also caught that `uvicorn` without `[standard]` refuses WebSocket
-  upgrades — Starlette's `TestClient` uses its own in-process implementation, so the test
-  suite passed while a real server would not have served the stream at all.
 
 ## What I cut, and why
 
