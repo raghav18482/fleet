@@ -1,0 +1,68 @@
+# Everything comes up with `docker compose up --build`. Three services: the broker, the
+# backend that consumes from it, and the simulated fleet that publishes into it.
+#
+# No `platform:` pinning anywhere. Both base images are multi-arch and both services build
+# from source, so this resolves natively on Apple Silicon and natively on x86_64 Linux.
+# Pinning linux/amd64 would only force emulation on the development machine.
+
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: fleet-mqtt
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "1883:1883"
+    healthcheck:
+      # Round-trips a real subscribe against the broker rather than just checking the
+      # port is open, so dependents only start once it can actually serve traffic.
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -t '$$SYS/broker/version' -C 1 -W 3 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 3s
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: fleet-backend
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    environment:
+      MQTT_HOST: mqtt
+      MQTT_PORT: "1883"
+      DATA_DIR: /data
+      DB_PATH: /tmp/fleet_history.db
+    volumes:
+      - ./data:/data:ro
+      # Mounted rather than baked in so the stream can be consumed with no local
+      # dependencies, and without a rebuild when the script changes:
+      #   docker compose exec -T backend python /srv/scripts/ws_client.py --check
+      - ./scripts:/srv/scripts:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  robot-sim:
+    build: ./sim
+    container_name: fleet-robots
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    environment:
+      MQTT_HOST: mqtt
+      MQTT_PORT: "1883"
+      EVENTS_FILE: /data/events.jsonl
+      ROBOTS_FILE: /data/robots.json
+      # 10x replays the recorded fifteen minutes in ninety seconds.
+      SPEED: "${SPEED:-10}"
+      # Fault injection, off by default. The recorded log is perfectly clean, so these
+      # are the only way the reconnect and staleness paths ever execute. Enable with:
+      #   CHAOS_DISCONNECT_PROB=0.01 CHAOS_DROP_PROB=0.05 docker compose up
+      CHAOS_DISCONNECT_PROB: "${CHAOS_DISCONNECT_PROB:-0}"
+      CHAOS_DROP_PROB: "${CHAOS_DROP_PROB:-0}"
+      CHAOS_JITTER_MS: "${CHAOS_JITTER_MS:-0}"
+    volumes:
+      - ./data:/data:ro
+    restart: unless-stopped

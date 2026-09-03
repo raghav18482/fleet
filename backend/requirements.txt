@@ -1,0 +1,7 @@
+fastapi==0.128.8
+# [standard] pulls in `websockets`, without which uvicorn refuses WebSocket upgrades at
+# runtime -- Starlette's TestClient uses its own in-process implementation, so tests pass
+# either way and the gap only shows up against a real server.
+uvicorn[standard]==0.39.0
+pydantic==2.13.5
+aiomqtt==2.5.1
